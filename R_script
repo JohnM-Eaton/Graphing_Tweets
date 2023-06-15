@@ -1,0 +1,264 @@
+# Making a Time Series Plot of Tweets over 24 hour period by #Hashtag
+
+# Cancel data already loaded. Bring in #Fire data
+# Load network data- FireGina
+fire <- read.csv("C:\\Users\\\\FireGinaCarano.csv") 
+# Fix time variables for fire network
+fire$newdate <- as.POSIXct(fire$created_at)
+fire$fixdate <- as_date(fire$newdate)
+fire$fixdatetime <- as_datetime(fire$newdate)
+fire$fixedtime <- hms::as_hms(fire$newdate)
+
+library(rtweet)
+library(dplyr)
+library(tidyverse)
+library(tidytext)
+library(ggplot2)
+library(tidyquant)
+library(scales)
+library(cowplot)
+library(ggtext)
+library(lubridate)
+library(gridExtra)
+
+# Want plot of Feb 10-12
+fire_feb10 <- subset(fire, fixdate ==c('2021-02-10'))
+fire_feb11 <- subset(fire, fixdate ==c('2021-02-11'))
+fire_feb12 <- subset(fire, fixdate ==c('2021-02-12'))
+
+# need to drop all time variables except 1; use created_at- Central time
+fire_feb10 <- subset(fire_feb10, select = -c(date, time, fixedtime, fixdate, fixdatetime, newdate))
+fire_feb11 <- subset(fire_feb11, select = -c(date, time, fixedtime, fixdate, fixdatetime, newdate))
+fire_feb12 <- subset(fire_feb12, select = -c(date, time, fixedtime, fixdate, fixdatetime, newdate))
+
+# Fix time variables for cancel network
+cancel$newdate <- as.POSIXct(cancel$created_at)
+cancel$fixdate <- as_date(cancel$newdate)
+cancel$fixedtime <- hms::as_hms(cancel$newdate)
+
+cancel_feb10 <- subset(cancel, fixdate ==c('2021-02-10'))
+cancel_feb11 <- subset(cancel, fixdate ==c('2021-02-11'))
+cancel_feb12 <- subset(cancel, fixdate ==c('2021-02-12'))
+
+# need to drop all time variables except 1; use created_at- Central time
+cancel_feb10 <- subset(cancel_feb10, select = -c(date, time, fixedtime, fixdate, newdate))
+cancel_feb11 <- subset(cancel_feb11, select = -c(date, time, fixedtime, fixdate, newdate))
+cancel_feb12 <- subset(cancel_feb12, select = -c(date, time, fixedtime, fixdate, newdate))
+
+# Combine datasets BY DAY
+# First ID all #fire networks
+# add a new column "network" with value "#Fire"
+fire_feb10 <- fire_feb10 %>% mutate(network = "#FireGinaCarano")
+fire_feb11 <- fire_feb11 %>% mutate(network = "#FireGinaCarano")
+fire_feb12 <- fire_feb12 %>% mutate(network = "#FireGinaCarano")
+# do same for #CancelDisneyPlus
+cancel_feb10 <- cancel_feb10 %>% mutate(network = "#CancelDisneyPlus")
+cancel_feb11 <- cancel_feb11 %>% mutate(network = "#CancelDisneyPlus")
+cancel_feb12 <- cancel_feb12 %>% mutate(network = "#CancelDisneyPlus")
+
+# merge the datasets by the 'id' column
+merged_df_feb10 <- rbind(fire_feb10, cancel_feb10)
+
+merged_df_feb11 <- rbind(fire_feb11, cancel_feb11)
+
+merged_df_feb12 <- rbind(fire_feb12, cancel_feb12)
+
+# Prep for plotting
+# Fix time variables
+merged_df_feb10$date <- as.POSIXct(merged_df_feb10$created_at)
+ts_info(merged_df_feb10)
+
+# Now start plotting
+# Load ggplot2
+library(ggplot2)
+
+# If 'network' is not already a factor, convert it into one
+if (!is.factor(merged_df_feb10$network)) {
+  merged_df_feb10$network <- as.factor(merged_df_feb10$network)
+}
+
+# Plotting
+
+# Plot overall number of tweets
+ggplot(merged_df_feb10, aes(x=network)) +
+  geom_bar(fill='steelblue', color='black') +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(x = 'Network', y = 'Number of Tweets', title = 'Number of Tweets per Network')
+
+# Load ggplot2 and dplyr
+
+
+# Plotting over the days Feb 10-12 for both networks
+# merge the datasets by the 'id' column
+merged_df <- rbind(fire_feb10, fire_feb11, cancel_feb10, cancel_feb11,
+                    fire_feb12, cancel_feb12)
+merged_df_fire <- rbind(fire_feb10, fire_feb11, fire_feb12)
+merged_df_cancel <- rbind(cancel_feb10, cancel_feb11, cancel_feb12)
+
+
+# If 'time' is not already in POSIXct or Date-Time format, convert it
+if (!inherits(merged_df$created_at, "POSIXct")) {
+  merged_df$created_at <- ymd_hms(merged_df$created_at)
+}
+
+
+# Create a new column that represents the minute of each tweet
+merged_df$hour <- floor_date(merged_df$created_at, "hour")
+
+# Count the number of tweets per minute
+tweet_counts_full <- merged_df %>%
+  group_by(hour, network) %>%
+  summarise(n = n())
+
+# Plotting
+?ggplot
+library(extrafont)
+library(remotes)
+remotes::install_version("Rttf2pt1", version = "1.3.8")
+import fonts from computer
+extrafont::font_import()
+# Register fonts for Windows bitmap output
+extrafont::loadfonts(device="win")
+# see available fonts
+fonts()
+fonttable()
+
+ggplot(tweet_counts_full, aes(x=hour, y=n, color=network)) +
+  geom_line() +
+  scale_x_datetime(breaks=date_breaks("12 hour"),
+                   labels = date_format("%b %d, %H:%M")) +
+  labs(x = NULL, y = 'Number of Tweets', color = 'Network',
+       caption = "Total tweets are 55,061 (#Fire - 13,216 & #Cancel - 41,845). Despite initial backlash to Carano's
+       post, there was significantly greater conversation to Disney's firing of Carano.") +
+  theme_minimal_hgrid() +
+  ggtitle("Figure 1. Number of Tweets per Hour by Network") +  
+  theme(plot.title = element_text(family = "Palatino Linotype",              # Font family
+                                  face = "bold",                 # Font face
+                                  size = 15,                     # Font size
+                                  hjust = 0.11,                     # Horizontal adjustment
+                                  vjust = 0.5,                     # Vertical adjustment
+                                  lineheight = 1,                # Line spacing
+                                  margin = margin(20, 0, 0, 0)), # Margins (t, r, b, l)
+        plot.caption = element_text(family = "Palatino Linotype", hjust = 1),
+        axis.title.x = element_text(family = "Palatino Linotype"),
+        axis.text.x = element_text(family = "Palatino Linotype"),
+        axis.text.y = element_text(family = "Palatino Linotype"),
+        axis.title.y = element_text(family = "Palatino Linotype"),
+        legend.text = element_text(family = "Palatino Linotype"),
+        legend.title = element_text(family = "Palatino Linotype", hjust = .25),
+        legend.position = c(1, .95), legend.justification = c(1, .95),
+        plot.title.position = "plot")          
+
+# ####Plot Feb 10-12 by minute & day
+# Fix time variables
+# If 'time' is not already in POSIXct or Date-Time format, convert it
+if (!inherits(merged_df_feb10$created_at, "POSIXct")) {
+  merged_df_feb10$created_at <- ymd_hms(merged_df_feb10$created_at)
+}
+if (!inherits(merged_df_feb11$created_at, "POSIXct")) {
+  merged_df_feb11$created_at <- ymd_hms(merged_df_feb11$created_at)
+}
+if (!inherits(merged_df_feb12$created_at, "POSIXct")) {
+  merged_df_feb12$created_at <- ymd_hms(merged_df_feb12$created_at)
+}
+
+# Create a new column that represents the minute of each tweet
+merged_df_feb10$minute <- floor_date(merged_df_feb10$created_at, "minute")
+merged_df_feb11$minute <- floor_date(merged_df_feb11$created_at, "minute")
+merged_df_feb12$minute <- floor_date(merged_df_feb12$created_at, "minute")
+
+# Count the number of tweets per minute
+tweet_counts_f1 <- merged_df_feb10 %>%
+  group_by(minute, network) %>%
+  summarise(n = n())
+tweet_counts_f2 <- merged_df_feb11 %>%
+  group_by(minute, network) %>%
+  summarise(n = n())
+tweet_counts_f3 <- merged_df_feb12 %>%
+  group_by(minute, network) %>%
+  summarise(n = n())
+
+
+
+# Plotting - baseline; need to remove title, caption, and legend
+ggplot(tweet_counts_f1, aes(x=minute, y=n, color=network)) +
+  geom_line() +
+  labs(x = 'Tweets by Minute', y = 'Number of Tweets', color = 'Network',
+       caption = "Total tweets are 19,538 (#Fire - 11,212 & #Cancel - 8,326). Despite initial backlash to Carano's
+       post, there was significantly greater conversation to Disney's firing of Carano.") +
+  theme_minimal_hgrid() +
+  ggtitle("Figure 2. Number of Tweets per Minute by Network") +  
+  theme(plot.title = element_text(family = "Palatino Linotype",              # Font family
+                                  face = "bold",                 # Font face
+                                  size = 15,                     # Font size
+                                  hjust = 0.5,                     # Horizontal adjustment
+                                  vjust = 0.5,                     # Vertical adjustment
+                                  lineheight = 1,                # Line spacing
+                                  margin = margin(20, 0, 0, 0)), # Margins (t, r, b, l)
+        plot.caption = element_text(family = "Palatino Linotype", hjust = 1),
+        axis.title.x = element_text(family = "Palatino Linotype"),
+        axis.text.x = element_text(family = "Palatino Linotype"),
+        axis.text.y = element_text(family = "Palatino Linotype"),
+        axis.title.y = element_text(family = "Palatino Linotype"),
+        legend.text = element_text(family = "Palatino Linotype"),
+        legend.title = element_text(family = "Palatino Linotype", hjust = 0),
+        legend.position = c(1, 1.08), legend.justification = c(1, 1.08),
+        plot.title.position = "plot") 
+
+# Feb 10
+feb10_plot <- ggplot(tweet_counts_f1, aes(x=minute, y=n, color=network)) +
+  geom_line() +
+  labs(x = NULL, y = NULL, color = NULL, caption = "Feburary 10th - Total tweets are 19,538 (#Fire - 11,212 & #Cancel - 8,326)") +
+  scale_x_time(breaks=date_breaks("2 hour"), 
+               labels = label_time("%H:%M")) +
+  theme_minimal_hgrid() +
+  ggtitle("Figure 2. Number of Tweets per Minute by Network") +  
+  theme(plot.title = element_text(family = "Palatino Linotype",              # Font family
+                                  face = "bold",                 # Font face
+                                  size = 15,                     # Font size
+                                  hjust = 0.05,                     # Horizontal adjustment
+                                  vjust = 0.5,                     # Vertical adjustment
+                                  lineheight = 1,                # Line spacing
+                                  margin = margin(20, 0, 0, 0)), # Margins (t, r, b, l)
+        plot.title.position = "plot",
+        axis.title.x = element_text(family = "Palatino Linotype"),
+        axis.text.x = element_text(family = "Palatino Linotype"),
+        axis.text.y = element_text(family = "Palatino Linotype"),
+        axis.title.y = element_text(family = "Palatino Linotype"),
+        legend.position = "none",
+        plot.caption = element_text(family = "Palatino Linotype", hjust = 1))
+feb10_plot
+# Feb 11
+feb11_plot <- ggplot(tweet_counts_f2, aes(x=minute, y=n, color=network)) +
+  geom_line() +
+  labs(x = NULL, y = 'Tweets by Minute', color = NULL, caption = "Feburary 11th -Total tweets are 29,401 (#Fire - 1,711 & #Cancel - 27,690)") +
+  scale_x_time(breaks=date_breaks("2 hour"), 
+               labels = label_time("%H:%M")) +
+  theme_minimal_hgrid() +
+  theme(legend.text = element_text(family = "Palatino Linotype"),
+        legend.title = element_text(family = "Palatino Linotype", hjust = 0),
+        legend.position = c(1, 0.65), legend.justification = c(1, 0.65),
+        axis.title.x = element_text(family = "Palatino Linotype"),
+        axis.text.x = element_text(family = "Palatino Linotype"),
+        axis.text.y = element_text(family = "Palatino Linotype"),
+        axis.title.y = element_text(family = "Palatino Linotype"),
+        plot.caption = element_text(family = "Palatino Linotype", hjust = 1))
+feb11_plot
+
+# Feb 12
+feb12_plot <- ggplot(tweet_counts_f3, aes(x=minute, y=n, color=network)) +
+  geom_line() +
+  labs(x = NULL, y = NULL, color = NULL, caption = "Feburary 12th -Total tweets are 6,122 (#Fire - 293 & #Cancel - 5,829)") +
+  scale_x_time(breaks=date_breaks("2 hour"), 
+               labels = label_time("%H:%M")) +
+  theme_minimal_hgrid() +
+  theme(legend.position = "none",
+        axis.title.x = element_text(family = "Palatino Linotype"),
+        axis.text.x = element_text(family = "Palatino Linotype"),
+        axis.text.y = element_text(family = "Palatino Linotype"),
+        axis.title.y = element_text(family = "Palatino Linotype"),
+        plot.caption = element_text(family = "Palatino Linotype", hjust = 1))
+feb12_plot
+
+# Plot Figure 2
+plot_row <- grid.arrange(feb10_plot, feb11_plot, feb12_plot, ncol=1, nrow =3)
